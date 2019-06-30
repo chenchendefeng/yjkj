@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.management.monrepo.dao.MonPersonDao">
+    <sql id="pageSql">
+        limit #{size} offset (#{page} * #{size})
+    </sql>
+
+    <sql id="MonPersonListSql">
+        select *, #{repoId} as repo_id
+        from (
+        select p.uid, min(p.name) as name, min(p.sex) as sex, min(p.age) as age, min(p.birthplace) as birthplace, min(p.address) as address,
+        min(p.monitor_type) as monitor_type, min(p.cert_code) as cert_code, min(p.phone) as phone, min(p.description) as description,
+        GROUP_CONCAT(concat((CASE WHEN o.object_type = 1 THEN 'MAC' WHEN o.object_type = 2 THEN '车牌' WHEN o.object_type = 3 THEN 'IMEI' WHEN o.object_type = 4 THEN 'IMSI' ELSE '' END), ' ', o.object_value)) as object_values,
+        min(p.create_at) as create_at, min(p.update_at) as update_at
+        from (
+        select uid, name, sex, age, birthplace, address, monitor_type, cert_code, phone, description, create_at, update_at from t_monitor_person where repo_id = #{repoId}
+        ) p left join t_monitor_object o on p.uid = o.person_id group by p.uid
+        ) result
+        <where>
+            <if test="name != ''">
+                result.name like concat('%', #{name}, '%')
+            </if>
+            <if test="objectValue != ''">
+                and result.object_values like concat('%', #{objectValue}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectMonPersonList" resultType="com.jiayi.platform.management.monrepo.dto.MonPersonDto">
+        <include refid="MonPersonListSql" />
+        order by update_at desc
+        <include refid="pageSql" />
+    </select>
+
+    <select id="countMonPersonList" resultType="Long">
+        select count(1) from (<include refid="MonPersonListSql" />) person
+    </select>
+
+    <select id="selectMonPersonById" resultType="com.jiayi.platform.management.monrepo.entity.MonitorPerson">
+        select * from t_monitor_person where uid = #{id}
+    </select>
+
+    <select id="countMonPersonByMd5" resultType="int">
+        select count(1) from t_monitor_person where md5 = #{md5}
+    </select>
+
+    <insert id="insertMonPerson">
+        insert into t_monitor_person(uid, name, sex, age, birthplace, address, cert_code, phone, description, monitor_type, repo_id, user_id, create_at, update_at, md5)
+        values(#{uid}, #{name}, #{sex}, #{age}, #{birthplace}, #{address}, #{certCode}, #{phone}, #{description}, #{monitorType}, #{repoId}, #{userId}, #{createAt}, #{updateAt}, #{md5})
+    </insert>
+
+    <insert id="batchInsertPersons">
+        insert into t_monitor_person(uid, name, sex, age, birthplace, address, cert_code, phone, description, monitor_type, repo_id, user_id, create_at, update_at, md5)
+        <foreach collection="list" index="index" item="item" open=" " separator="union all" close=" ">
+            select #{item.uid}, #{item.name}, #{item.sex}, #{item.age}, #{item.birthplace}, #{item.address}, #{item.certCode}, #{item.phone},
+                    #{item.description}, #{item.monitorType}, #{item.repoId}, #{item.userId}, #{item.createAt}, #{item.updateAt}, #{item.md5}
+        </foreach>
+    </insert>
+
+    <update id="updateMonPerson">
+        update t_monitor_person set name = #{name}, sex = #{sex}, age = #{age}, birthplace = #{birthplace}, address = #{address}, cert_code = #{certCode},
+                phone = #{phone}, description = #{description}, monitor_type = #{monitorType}, user_id = #{userId}, update_at = #{updateAt}, md5 = #{md5}
+        where uid = #{uid}
+    </update>
+
+    <insert id="insertMonObject">
+        insert into t_monitor_object(uid, object_name, object_type, object_value, vendor_desc, description, person_id, repo_id, user_id, create_at, update_at, md5)
+        values(#{uid}, #{objectName}, #{objectType}, #{objectValue}, #{vendorDesc}, #{description}, #{personId}, #{repoId}, #{userId}, #{createAt}, #{updateAt}, #{md5})
+    </insert>
+
+    <delete id="deleteMonPersonById">
+        delete from t_monitor_person where uid = #{personId}
+    </delete>
+
+    <delete id="deleteMonObjectByPersonId">
+        delete from t_monitor_object where person_id = #{personId}
+    </delete>
+
+    <update id="updateMonPersonResc">
+        update t_monitor_person set description = #{request.description},update_at = #{now} where uid=#{request.uid}
+    </update>
+</mapper>

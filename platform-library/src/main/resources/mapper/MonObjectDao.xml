@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.management.monrepo.dao.MonObjectDao">
+    <sql id="pageSql">
+        limit #{size} offset (#{page} * #{size})
+    </sql>
+
+    <sql id="MonObjectListSql">
+        select *, #{repoId} as repo_id from
+        (
+            select uid, object_name, object_type, object_value, description, person_id, name, cert_code, phone, address, create_at, update_at from t_monitor_object where person_id is null and repo_id = #{repoId}
+            union all
+            select o.uid, o.object_name, o.object_type, o.object_value, o.description, o.person_id, p.name, p.cert_code, p.phone, p.address, o.create_at, o.update_at from t_monitor_object o inner join t_monitor_person p on o.person_id = p.uid where o.repo_id = #{repoId}
+        ) result
+        <where>
+            <if test="objectName != ''">
+                result.object_name like concat('%', #{objectName}, '%')
+            </if>
+            <if test="objectType != -1 and objectValue != ''">
+                and result.object_type = #{objectType} and result.object_value like concat('%', #{objectValue}, '%')
+            </if>
+            <if test="name != ''">
+                and result.name like concat('%', #{name}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectMonObjectList" resultType="com.jiayi.platform.management.monrepo.dto.MonObjectDto">
+        <include refid="MonObjectListSql" />
+        order by update_at desc
+        <include refid="pageSql" />
+    </select>
+
+    <select id="countMonObjectList" resultType="Long">
+        select count(1) from (<include refid="MonObjectListSql" />) object
+    </select>
+
+    <select id="selectMonObjectById" resultType="com.jiayi.platform.management.monrepo.entity.MonitorObject">
+        select * from t_monitor_object where uid = #{id}
+    </select>
+
+    <select id="countMonObjectByMd5" resultType="int">
+        select count(1) from t_monitor_object where md5 = #{md5}
+    </select>
+
+    <insert id="insertMonObject">
+        insert into t_monitor_object(uid, object_name, object_type, object_value, vendor_desc, description, person_id, repo_id, user_id, create_at, update_at, name, cert_code, phone, address, md5)
+        values(#{uid}, #{objectName}, #{objectType}, #{objectValue}, #{vendorDesc}, #{description}, #{personId}, #{repoId}, #{userId}, #{createAt}, #{updateAt}, #{name}, #{certCode}, #{phone}, #{address}, #{md5})
+    </insert>
+
+    <insert id="batchInsertObjects">
+        insert into t_monitor_object(uid, object_name, object_type, object_value, vendor_desc, description, person_id, repo_id, user_id, create_at, update_at, name, cert_code, phone, address, md5)
+        <foreach collection="list" index="index" item="item" open=" " separator="union all" close=" ">
+            select #{item.uid}, #{item.objectName}, #{item.objectType}, #{item.objectValue}, #{item.vendorDesc}, #{item.description}, #{item.personId},
+                    #{item.repoId}, #{item.userId}, #{item.createAt}, #{item.updateAt}, #{item.name}, #{item.certCode}, #{item.phone}, #{item.address}, #{item.md5}
+        </foreach>
+    </insert>
+
+    <update id="updateMonObject">
+        update t_monitor_object set object_name = #{objectName}, object_type = #{objectType}, object_value = #{objectValue}, vendor_desc = #{vendorDesc}, description = #{description}, user_id = #{userId}, update_at = #{updateAt},
+                name = #{name}, cert_code = #{certCode}, phone = #{phone}, address = #{address}, md5 = #{md5}
+        where uid = #{uid}
+    </update>
+
+    <delete id="deleteMonObjectById">
+        delete from t_monitor_object where uid = #{id}
+    </delete>
+
+    <update id="updateMonObjectResc">
+        update t_monitor_object set description = #{request.description},update_at = #{now} where uid=#{request.uid}
+    </update>
+</mapper>

@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.AggregateDao">
+    <sql id="unionSql">
+        SELECT * FROM (
+        <foreach collection="queryList" index="index" item="query" open=" " separator="UNION" close=" ">
+            <if test='query.collisionType == "collision_follow"'>
+                <include refid="selectFollowResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_area"'>
+                <include refid="selectAreaResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_path"'>
+                <include refid="selectLineResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_appear"'>
+                <include refid="selectAppearResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_disappear"'>
+                <include refid="selectAppearResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_multi_track"'>
+                <include refid="selectMultiTrackResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "device_analysis"'>
+                <include refid="selectDeviceAnalysisResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "multifeature_analysis"'>
+                <include refid="selectMultiFeatureAnalysisResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "intimate_relationship_analysis"'>
+                <include refid="selectIntimateRelationAnalysisResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_aggregate"'>
+                <include refid="selectAggregateResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "file_import"'>
+                <include refid="selectFileImportResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "repo_import"'>
+                <include refid="selectRepoImportResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "mining_repo"'>
+                <include refid="selectMiningRepoAggregate"/>
+            </if>
+        </foreach>
+        ) aggr
+    </sql>
+
+    <sql id="intersectSql">
+        SELECT
+        <choose>
+            <when test="referIndex == -1"> DISTINCT colli_0.result_value </when>
+            <otherwise> DISTINCT colli_#{referIndex}.* </otherwise>
+        </choose>
+        FROM
+        <foreach collection="queryList" index="index" item="query" open=" " separator="INNER JOIN" close=" ">
+            <if test='query.collisionType == "collision_follow"'>
+                (
+                <include refid="selectFollowResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "collision_area"'>
+                (
+                <include refid="selectAreaResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "collision_path"'>
+                (
+                <include refid="selectLineResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "collision_appear"'>
+                (
+                <include refid="selectAppearResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "collision_disappear"'>
+                (
+                <include refid="selectAppearResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "collision_multi_track"'>
+                (
+                <include refid="selectMultiTrackResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "device_analysis"'>
+                (
+                <include refid="selectDeviceAnalysisResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "multifeature_analysis"'>
+                (
+                <include refid="selectMultiFeatureAnalysisResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "intimate_relationship_analysis"'>
+                (
+                <include refid="selectIntimateRelationAnalysisResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "collision_aggregate"'>
+                (
+                <include refid="selectAggregateResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "file_import"'>
+                (
+                <include refid="selectFileImportResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "repo_import"'>
+                (
+                <include refid="selectRepoImportResultAggregate"/>
+                ) colli_#{index}
+            </if>
+            <if test='query.collisionType == "mining_repo"'>
+                (
+                <include refid="selectMiningRepoAggregate"/>
+                ) colli_#{index}
+            </if>
+        </foreach>
+        ON
+        <foreach collection="queryList" index="index" item="query" open=" " separator="and" close=" ">
+            colli_0.result_value = colli_#{index}.result_value
+        </foreach>
+    </sql>
+
+    <sql id="subtractSql">
+        SELECT
+        <choose>
+            <when test="referIndex == 0"> * </when>
+            <otherwise>
+                result_value
+                <foreach collection="resultColumns" index="innerIndex" item="value" open=", " separator="," close=" ">
+                    NULL AS v${innerIndex + 1}
+                </foreach>
+            </otherwise>
+        </choose>
+        FROM (
+        <foreach collection="queryList" index="index" item="query" open=" "
+                 separator=") subtracted WHERE result_value NOT IN ( SELECT result_value FROM (" close=" ">
+            <if test='query.collisionType == "collision_follow"'>
+                <include refid="selectFollowResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_area"'>
+                <include refid="selectAreaResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_path"'>
+                <include refid="selectLineResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_appear"'>
+                <include refid="selectAppearResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_disappear"'>
+                <include refid="selectAppearResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_multi_track"'>
+                <include refid="selectMultiTrackResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "device_analysis"'>
+                <include refid="selectDeviceAnalysisResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "multifeature_analysis"'>
+                <include refid="selectMultiFeatureAnalysisResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "intimate_relationship_analysis"'>
+                <include refid="selectIntimateRelationAnalysisResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "collision_aggregate"'>
+                <include refid="selectAggregateResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "file_import"'>
+                <include refid="selectFileImportResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "repo_import"'>
+                <include refid="selectRepoImportResultAggregate"/>
+            </if>
+            <if test='query.collisionType == "mining_repo"'>
+                <include refid="selectMiningRepoAggregate"/>
+            </if>
+        </foreach>
+        ) subtracter )
+    </sql>
+
+    <sql id="xorSql">
+        SELECT subtracted.* FROM (
+        <include refid="unionSql"/>
+        ) subtracted
+        WHERE result_value NOT IN (
+        SELECT result_value FROM (
+        <include refid="intersectSql"/>
+        ) subtracter
+        )
+    </sql>
+
+    <sql id="selectColumns">
+        SELECT CAST(${query.queryValue} AS STRING) result_value
+        <choose>
+        <when test="query.referTo == true or (query.referTo == false and query.collisionType == referCollisionType)">
+            <foreach collection="resultColumns" index="innerIndex" item="value" open=", " separator="," close=" ">
+                CAST(${value} AS STRING) AS v${innerIndex + 1}
+            </foreach>
+        </when>
+        <otherwise>
+            <foreach collection="resultColumns" index="innerIndex" item="value" open=", " separator="," close=" ">
+                <if test='value == referQueryColumn'>
+                    CAST(${query.queryValue} AS STRING) AS v${innerIndex + 1}
+                </if>
+                <if test='value != referQueryColumn'>
+                    NULL AS v${innerIndex + 1}
+                </if>
+            </foreach>
+        </otherwise>
+        </choose>
+    </sql>
+
+    <sql id="selectFollowResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_follow WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectAreaResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_area WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectLineResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_line WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectAppearResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_appear WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectMultiTrackResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_multi_track WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectDeviceAnalysisResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_device_analysis WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectMultiFeatureAnalysisResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_multi_feature WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectIntimateRelationAnalysisResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_intimate_relation WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectFileImportResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_file_import WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectRepoImportResultAggregate">
+        <include refid="selectColumns"/> FROM t_monitor_object WHERE repo_id = #{query.uid}
+    </sql>
+
+    <sql id="selectAggregateResultAggregate">
+        <include refid="selectColumns"/> FROM judge_result_aggregate WHERE uid = #{query.uid}
+    </sql>
+
+    <sql id="selectMiningRepoAggregate">
+        <include refid="selectColumns"/>
+        FROM ${query.miningParam.tableName} WHERE delete_flag = 0
+        <if test='query.miningParam.startTime != null'>
+            AND ${query.miningParam.startTimeFieldName} <![CDATA[>]]>= #{query.miningParam.startTime}
+            AND ${query.miningParam.endTimeFieldName} <![CDATA[<]]>= #{query.miningParam.endTime}
+        </if>
+        <if test='query.miningParam.objTypes != null and query.miningParam.objTypes.size() > 0'>
+            AND ${query.miningParam.objTypeFieldName} IN
+            <foreach collection="query.miningParam.objTypes" index="index" item="objType" open="(" separator="," close=")">
+                #{objType}
+            </foreach>
+        </if>
+    </sql>
+
+    <insert id="insertAggregateResult">
+        INSERT INTO judge_result_aggregate (uid, uid_mod, result_value
+        <foreach collection="resultColumns" index="innerIndex" item="value" open=", " separator="," close=" ">
+            v${innerIndex + 1}
+        </foreach>
+        )
+        SELECT #{uid} as uid, #{uid} % 20 AS uid_mod, result.* FROM
+        (
+        <if test='aggregateType == "union"'>
+            <include refid="unionSql"/>
+        </if>
+        <if test='aggregateType == "intersect"'>
+            <include refid="intersectSql"/>
+        </if>
+        <if test='aggregateType == "subtract"'>
+            <include refid="subtractSql"/>
+        </if>
+        <if test='aggregateType == "xor"'>
+            <include refid="xorSql"/>
+        </if>
+        ) result
+    </insert>
+
+    <select id="selectAggregateResult" resultType="AggregateDto">
+        SELECT * FROM judge_result_aggregate WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY result_value
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAggregateResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_aggregate WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+    <select id="selectAggregate" resultType="AggregateDto">
+        SELECT result.* FROM
+        (
+        <if test='aggregateType == "union"'>
+            <include refid="unionSql"/>
+        </if>
+        <if test='aggregateType == "intersect"'>
+            <include refid="intersectSql"/>
+        </if>
+        <if test='aggregateType == "subtract"'>
+            <include refid="subtractSql"/>
+        </if>
+        <if test='aggregateType == "xor"'>
+            <include refid="xorSql"/>
+        </if>
+        ) result
+        ORDER BY result_value
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAggregate" resultType="Long">
+        SELECT COUNT(1) FROM (
+        <if test='aggregateType == "union"'>
+            <include refid="unionSql"/>
+        </if>
+        <if test='aggregateType == "intersect"'>
+            <include refid="intersectSql"/>
+        </if>
+        <if test='aggregateType == "subtract"'>
+            <include refid="subtractSql"/>
+        </if>
+        <if test='aggregateType == "xor"'>
+            <include refid="xorSql"/>
+        </if>
+        ) results
+    </select>
+</mapper>

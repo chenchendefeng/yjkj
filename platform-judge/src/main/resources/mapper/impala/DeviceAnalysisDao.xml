@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.DeviceAnalysisDao">
+    <sql id="deviceAnalysisSql">
+        SELECT #{uid} as uid, #{uid} % 20 AS uid_mod, object_value, match_count, min_happen_at, max_happen_at
+        FROM (
+            SELECT object_value, COUNT(device_id) AS match_count, MIN(record_at) AS min_happen_at, MAX(record_at) AS max_happen_at
+            FROM (
+            <foreach collection="tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT object_value, device_id, grid_code, record_at
+                FROM ${tableName} WHERE track_type = #{trackType} AND
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        hours <![CDATA[>]]>= #{recentBeginHours} AND hours <![CDATA[<]]>= #{recentEndHours}
+                        AND record_at <![CDATA[>]]>= #{recentBeginDate} AND record_at <![CDATA[<]]>= #{recentEndDate}
+                    </when>
+                    <otherwise>
+                        hours <![CDATA[>]]>= #{beginHours} AND hours <![CDATA[<]]>= #{endHours}
+<!--                        <if test="null != gridList and gridList.size > 0 and gridList.size &lt; 9000">-->
+<!--                            AND grids IN-->
+<!--                            <foreach collection="gridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                #{item}-->
+<!--                            </foreach>-->
+<!--                        </if>-->
+                        AND record_at <![CDATA[>]]>= #{beginDate} AND record_at <![CDATA[<]]>= #{endDate}
+                    </otherwise>
+                </choose>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) track
+            GROUP BY object_value
+        ) analysis
+    </sql>
+
+    <select id="selectDeviceAnalysis" resultType="DeviceAnalysisDto">
+        <include refid="deviceAnalysisSql" />
+        ORDER BY match_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql" />
+    </select>
+
+    <select id="countDeviceAnalysis" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="deviceAnalysisSql" />) analyses
+    </select>
+
+    <insert id="insertDeviceAnalysisResult">
+        INSERT INTO judge_result_device_analysis (uid, uid_mod, object_value, match_count, min_happen_at, max_happen_at)
+        <include refid="deviceAnalysisSql" />
+    </insert>
+
+    <select id="selectDeviceAnalysisResult" resultType="DeviceAnalysisDto">
+        SELECT * FROM judge_result_device_analysis WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY match_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql" />
+    </select>
+
+    <select id="countDeviceAnalysisResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_device_analysis WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+
+    <sql id="deviceAnalysisDetailSql">
+        SELECT track.* FROM (
+        <foreach collection="tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+            SELECT record_at, device_id
+            FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{objectValue}
+            <choose>
+                <when test="tableName.contains('recent')">
+                    AND day <![CDATA[>]]>= #{recentBeginHours} AND day <![CDATA[<]]>= #{recentEndHours}
+                    AND record_at <![CDATA[>]]>= #{recentBeginDate} AND record_at <![CDATA[<]]>= #{recentEndDate}
+                </when>
+                <otherwise>
+                    AND obj_mod = #{objectHash}
+                    AND day <![CDATA[>]]>= #{beginHours} AND day <![CDATA[<]]>= #{endHours}
+                    AND record_at <![CDATA[>]]>= #{beginDate} AND record_at <![CDATA[<]]>= #{endDate}
+                </otherwise>
+            </choose>
+            <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                AND device_id IN
+                <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
+        </foreach>
+        ) track
+    </sql>
+
+    <select id="selectDeviceAnalysisDetail" resultType="DeviceAnalysisDetailDto">
+        <include refid="deviceAnalysisDetailSql"/>
+        ORDER BY record_at DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countDeviceAnalysisDetail" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="deviceAnalysisDetailSql"/>) tracks
+    </select>
+
+
+    <select id="selectDeviceAnalysisStat" resultType="DeviceAnalysisStatDto">
+        SELECT track_info.* FROM (
+            SELECT
+            <choose>
+                <when test="statType == 'HOUR'">
+                    (CAST(record_at / (60 * 60 * 1000) AS INT) + 8) % 24 AS key,
+                </when>
+                <when test="statType == 'DAY'">
+                    DAYOFMONTH(TO_TIMESTAMP(CAST(record_at / 1000 AS INT))) AS key,
+                </when>
+                <when test="statType == 'WEEK'">
+                    CAST((record_at - 230400000) / (24 * 60 * 60 * 1000) AS INT) % 7 AS key,
+                </when>
+            </choose>
+            COUNT(1) AS value
+            FROM (
+            <foreach collection="tableNameList" index="index" item="tableName" open=" " separator="union" close=" ">
+                SELECT record_at
+                FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{objectValue}
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        AND day <![CDATA[>]]>= #{recentBeginHours} AND day <![CDATA[<]]>= #{recentEndHours}
+                        AND record_at <![CDATA[>]]>= #{recentBeginDate} AND record_at <![CDATA[<]]>= #{recentEndDate}
+                    </when>
+                    <otherwise>
+                        AND obj_mod = #{objectHash}
+                        AND day <![CDATA[>]]>= #{beginHours} AND day <![CDATA[<]]>= #{endHours}
+                        AND record_at <![CDATA[>]]>= #{beginDate} AND record_at <![CDATA[<]]>= #{endDate}
+                    </otherwise>
+                </choose>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+<!--                    <if test='objectTypeName== "mac"'>-->
+<!--                        AND ap_mac IS NOT NULL-->
+<!--                    </if>-->
+<!--                    <if test='objectTypeName== "imei"'>-->
+<!--                        AND imsi_code IS NOT NULL-->
+<!--                    </if>-->
+            </foreach>
+            ) track GROUP BY key
+        ) track_info ORDER BY key
+    </select>
+</mapper>

@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.AppearCollisionDao">
+    <sql id="appearSql">
+        SELECT #{uid} AS uid, #{uid} % 20 AS uid_mod, object_value,
+        CAST(SPLIT_PART(min_time_device, "*", 1) AS BIGINT) AS min_happen_at, CAST(SPLIT_PART(min_time_device, "*", 2) AS BIGINT) AS from_device_id,
+        CAST(SPLIT_PART(max_time_device, "*", 1) AS BIGINT) AS max_happen_at, CAST(SPLIT_PART(max_time_device, "*", 2) AS BIGINT) AS to_device_id
+        FROM (
+            SELECT object_value, MIN(time_device) AS min_time_device, MAX(time_device) AS max_time_device
+            FROM (
+            <foreach collection="analyzeTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT object_value, CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                FROM ${tableName} WHERE track_type = #{trackType} AND
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        hours <![CDATA[>]]>= #{analyzeRecentBeginHours} AND hours <![CDATA[<]]>= #{analyzeRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{analyzeRecentBeginDate} AND record_at <![CDATA[<]]>= #{analyzeRecentEndDate}
+                    </when>
+                    <otherwise>
+                        hours <![CDATA[>]]>= #{analyzeBeginHours} AND hours <![CDATA[<]]>= #{analyzeEndHours}
+<!--                        <if test="null != analyzeGridList and analyzeGridList.size > 0 and analyzeGridList.size &lt; 9000">-->
+<!--                            AND grids IN-->
+<!--                            <foreach collection="analyzeGridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                #{item}-->
+<!--                            </foreach>-->
+<!--                        </if>-->
+                        AND record_at <![CDATA[>]]>= #{analyzeBeginDate} AND record_at <![CDATA[<]]>= #{analyzeEndDate}
+                    </otherwise>
+                </choose>
+                AND object_value IN (
+                    SELECT object_value FROM ${tableName} result_ids WHERE track_type = #{trackType} AND
+                    <choose>
+                        <when test="tableName.contains('recent')">
+                            hours <![CDATA[>]]>= #{analyzeRecentBeginHours} AND hours <![CDATA[<]]>= #{analyzeRecentEndHours}
+                            AND record_at <![CDATA[>]]>= #{analyzeRecentBeginDate} AND record_at <![CDATA[<]]>= #{analyzeRecentEndDate}
+                        </when>
+                        <otherwise>
+                            hours <![CDATA[>]]>= #{analyzeBeginHours} AND hours <![CDATA[<]]>= #{analyzeEndHours}
+<!--                            <if test="null != analyzeGridList and analyzeGridList.size > 0 and analyzeGridList.size &lt; 9000">-->
+<!--                                AND grids IN-->
+<!--                                <foreach collection="analyzeGridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                    #{item}-->
+<!--                                </foreach>-->
+<!--                            </if>-->
+                            AND record_at <![CDATA[>]]>= #{analyzeBeginDate} AND record_at <![CDATA[<]]>= #{analyzeEndDate}
+                        </otherwise>
+                    </choose>
+                    <if test="null != analyzeDeviceIdList and analyzeDeviceIdList.size > 0 and analyzeDeviceIdList.size &lt; 9000">
+                        AND device_id IN
+                        <foreach collection="analyzeDeviceIdList" index="index" item="item" open="(" separator="," close=")">
+                            #{item}
+                        </foreach>
+                    </if>
+                    <if test="null != objectValueList and objectValueList.size > 0">
+                        AND object_value IN
+                        <foreach collection="objectValueList" index="index" item="item" open="(" separator="," close=")">
+                            #{item}
+                        </foreach>
+                    </if>
+                    <if test="(selectRefArea == false) or (selectRefArea == true and null != refDeviceIdList and refDeviceIdList.size > 0)">
+                        AND NOT EXISTS (
+                            SELECT object_value FROM (
+                            <foreach collection="refTableList" index="index" item="innerTableName" open=" " separator="UNION" close=" ">
+                                SELECT object_value FROM ${innerTableName} WHERE track_type = #{trackType} AND
+                                <choose>
+                                    <when test="innerTableName.contains('recent')">
+                                        hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                                    </when>
+                                    <otherwise>
+                                        hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+<!--                                        <if test="null != refGridList and refGridList.size > 0 and refGridList.size &lt; 9000">-->
+<!--                                            AND grids IN-->
+<!--                                            <foreach collection="refGridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                                #{item}-->
+<!--                                            </foreach>-->
+<!--                                        </if>-->
+                                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                                    </otherwise>
+                                </choose>
+                                <if test="null != refDeviceIdList and refDeviceIdList.size > 0 and refDeviceIdList.size &lt; 9000">
+                                    AND device_id IN
+                                    <foreach collection="refDeviceIdList" index="index" item="item" open="(" separator="," close=")">
+                                        #{item}
+                                    </foreach>
+                                </if>
+                            </foreach>
+                            ) ref_ids
+                            WHERE ref_ids.object_value = result_ids.object_value
+                        )
+                    </if>
+                )
+            </foreach>
+            ) result
+            GROUP BY object_value
+        ) appear
+    </sql>
+
+    <select id="selectAppear" resultType="AppearCollisionDto">
+        <include refid="appearSql"/>
+        ORDER BY min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAppear" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="appearSql"/>) appears
+    </select>
+
+    <insert id="insertAppearResult">
+        INSERT INTO judge_result_appear (uid, uid_mod, object_value, min_happen_at, from_device_id, max_happen_at, to_device_id)
+        <include refid="appearSql"/>
+    </insert>
+
+    <select id="selectAppearResult" resultType="AppearCollisionDto">
+        SELECT * FROM judge_result_appear WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAppearResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_appear WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+</mapper>

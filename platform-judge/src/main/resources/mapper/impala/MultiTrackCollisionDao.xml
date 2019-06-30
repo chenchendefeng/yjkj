@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.MultiTrackCollisionDao">
+    <sql id="multiTrackCollisionSql">
+        SELECT #{uid} AS uid, #{uid} % 20 AS uid_mod, object_value, unique_dev_count, match_count, track_count,
+        CAST(SPLIT_PART(min_time_device, "*", 1) AS BIGINT) AS min_happen_at, CAST(SPLIT_PART(min_time_device, "*", 2) AS BIGINT) AS from_device_id,
+        CAST(SPLIT_PART(max_time_device, "*", 1) AS BIGINT) AS max_happen_at, CAST(SPLIT_PART(max_time_device, "*", 2) AS BIGINT) AS to_device_id
+        FROM (
+            SELECT result.object_value,
+            COUNT(DISTINCT target_track.time_device) AS match_count, COUNT(result.device_id) AS track_count,
+            COUNT(DISTINCT target_track.grid_code) AS unique_dev_count,
+            MIN(result.time_device) AS min_time_device, MAX(result.time_device) AS max_time_device
+            FROM (
+            <foreach collection="objTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT object_value, record_at, device_id, CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                FROM ${tableName} WHERE track_type = #{objTrackType} AND
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        hours <![CDATA[>]]>= #{objRecentBeginHours} AND hours <![CDATA[<]]>= #{objRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{objRecentBeginDate} AND record_at <![CDATA[<]]>= #{objRecentEndDate}
+                    </when>
+                    <otherwise>
+                        hours IN (
+                            SELECT hours FROM (
+                            <foreach collection="refTableList" index="index" item="innerTableName" open=" " separator="UNION" close=" ">
+                                SELECT CAST((record_at + #{refTimeOffset}) / (#{splitHours} * 60 * 60 * 1000) AS INT) AS hours
+                                FROM ${innerTableName} WHERE track_type = #{refTrackType} AND object_value = #{refObjectValue}
+                                <choose>
+                                    <when test="tableName.contains('recent')">
+                                        AND hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                                    </when>
+                                    <otherwise>
+                                        AND hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                                    </otherwise>
+                                </choose>
+                            </foreach>
+                            UNION
+                            <foreach collection="refTableList" index="index" item="innerTableName" open=" " separator="UNION" close=" ">
+                                SELECT CAST((record_at - #{refTimeOffset}) / (#{splitHours} * 60 * 60 * 1000) AS INT) AS hours
+                                FROM ${innerTableName} WHERE track_type = #{refTrackType} AND object_value = #{refObjectValue}
+                                <choose>
+                                    <when test="tableName.contains('recent')">
+                                        AND hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                                    </when>
+                                    <otherwise>
+                                        AND hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                                    </otherwise>
+                                </choose>
+                            </foreach>
+                            ) refHours
+                        )
+<!--                        hours <![CDATA[>]]>= #{objBeginHours} AND hours <![CDATA[<]]>= #{objEndHours}-->
+                        AND record_at <![CDATA[>]]>= #{objBeginDate} AND record_at <![CDATA[<]]>= #{objEndDate}
+                    </otherwise>
+                </choose>
+                <if test="(null == objectValueList or objectValueList.size == 0) and objTrackType == refTrackType">
+                    AND object_value != #{refObjectValue}
+                </if>
+                <if test="null != objectValueList and objectValueList.size > 0">
+                    AND object_value IN
+                    <foreach collection="objectValueList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) result
+            JOIN (
+                SELECT device.device_id1, device.device_id2, target.begin_at, target.end_at, target.time_device, target.grid_code
+                FROM (
+                <foreach collection="refTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                    SELECT record_at - #{refTimeOffset} AS begin_at, record_at + #{refTimeOffset} AS end_at, device_id, grid_code,
+                    CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                    FROM ${tableName} WHERE track_type = #{refTrackType} AND object_value = #{refObjectValue}
+                    <choose>
+                        <when test="tableName.contains('recent')">
+                            AND hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                            AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                        </when>
+                        <otherwise>
+                            AND hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+                            AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ) target
+                JOIN (
+                    SELECT DISTINCT device_id1, device_id2
+                    FROM device_distance WHERE distance <![CDATA[<]]>= #{distance}
+                ) device
+                ON target.device_id = device.device_id1
+            ) target_track
+            ON result.device_id = target_track.device_id2
+            AND result.record_at BETWEEN target_track.begin_at AND target_track.end_at
+            GROUP BY result.object_value
+            HAVING COUNT(DISTINCT target_track.time_device) >= #{matchCount}
+        ) multi
+    </sql>
+
+    <select id="selectMultiTrack" resultType="MultiTrackCollisionDto">
+        <include refid="multiTrackCollisionSql"/>
+        ORDER BY unique_dev_count DESC, match_count DESC, track_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countMultiTrack" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="multiTrackCollisionSql"/>) multis
+    </select>
+
+    <insert id="insertMultiTrackResult">
+        INSERT INTO judge_result_multi_track (uid, uid_mod, object_value, unique_dev_count, match_count, track_count,
+        min_happen_at, from_device_id, max_happen_at, to_device_id)
+        <include refid="multiTrackCollisionSql"/>
+    </insert>
+
+    <select id="selectMultiTrackResult" resultType="MultiTrackCollisionDto">
+        SELECT * FROM judge_result_multi_track WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY unique_dev_count DESC, match_count DESC, track_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countMultiTrackResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_multi_track WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+
+    <sql id="multiTrackDetailSql">
+        SELECT object_value, origin_record_at, match_record_at, longitude, latitude, device_id, ref_longitude, ref_latitude,
+        origin_device_id, imsi_imei
+        FROM (
+            SELECT result.object_value, result.record_at AS match_record_at, target_track.record_at AS origin_record_at,
+            target_track.device_id AS origin_device_id, result.device_id AS device_id, result.longitude, result.latitude,
+            target_track.longitude AS ref_longitude, target_track.latitude AS ref_latitude, result.imsi_imei
+            FROM (
+                SELECT device.device_id1, device.device_id2, target.begin_at, target.end_at,
+                target.device_id, target.record_at, target.longitude, target.latitude
+                FROM (
+                <foreach collection="refTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                    SELECT record_at, record_at + #{refTimeOffset} AS end_at, record_at - #{refTimeOffset} AS begin_at,
+                    device_id, longitude, latitude
+                    FROM ${tableName} WHERE track_type = #{refTrackType} AND object_value = #{refObjectValue}
+                    <choose>
+                        <when test="tableName.contains('recent')">
+                            AND day <![CDATA[>]]>= #{refRecentBeginHours} AND day <![CDATA[<]]>= #{refRecentEndHours}
+                            AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                        </when>
+                        <otherwise>
+                            AND obj_mod = #{refObjectHash}
+                            AND day <![CDATA[>]]>= #{refBeginHours} AND day <![CDATA[<]]>= #{refEndHours}
+                            AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                        </otherwise>
+                    </choose>
+                </foreach>
+                ) target
+                JOIN (
+                    SELECT DISTINCT device_id1, device_id2
+                    FROM device_distance WHERE distance <![CDATA[<]]>= #{distance}
+                ) device
+                ON target.device_id = device.device_id1
+            ) target_track
+            JOIN (
+            <foreach collection="objTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT record_at, object_value, device_id, longitude, latitude
+                <choose>
+                    <when test="objTrackType == 3"> , imsi_code </when>
+                    <when test="objTrackType == 4"> , imei_code </when>
+                    <otherwise> , NULL </otherwise>
+                </choose>
+                AS imsi_imei
+                FROM ${tableName} WHERE track_type = #{objTrackType} AND object_value = #{objectValue}
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        AND day <![CDATA[>]]>= #{objRecentBeginHours} AND day <![CDATA[<]]>= #{objRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{objRecentBeginDate} AND record_at <![CDATA[<]]>= #{objRecentEndDate}
+                    </when>
+                    <otherwise>
+                        AND obj_mod = #{objectHash}
+                        AND day <![CDATA[>]]>= #{objBeginHours} AND day <![CDATA[<]]>= #{objEndHours}
+                        AND record_at <![CDATA[>]]>= #{objBeginDate} AND record_at <![CDATA[<]]>= #{objEndDate}
+                    </otherwise>
+                </choose>
+            </foreach>
+            ) result
+            ON result.device_id = target_track.device_id2
+            AND result.record_at BETWEEN target_track.begin_at AND target_track.end_at
+        ) track
+    </sql>
+
+    <select id="selectMultiTrackDetail" resultType="MultiTrackDetailDto">
+        <include refid="multiTrackDetailSql"/>
+        ORDER BY match_record_at DESC, origin_record_at DESC, device_id DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countMultiTrackDetail" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="multiTrackDetailSql"/>) tracks
+    </select>
+</mapper>

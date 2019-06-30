@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.management.monrepo.dao.MonRepoDao">
+    <sql id="pageSql">
+        limit #{limit} offset #{offset}
+    </sql>
+
+    <sql id="MonRepoListSql">
+        select uid, repo_name, repo_type, department_id, repo_desc, create_at, update_at, user_id, permission_type, permission_user_id as permissionUserIdStr
+        from t_monitor_repo
+        <where>
+            (permission_type = 1 or (permission_type = 2 and (user_id = #{userId}
+            <if test = "possibleUserStr != null and possibleUserStr.size > 0">
+                or
+                <foreach collection="possibleUserStr" index="index" item = "userId" open="(" separator="or" close=")">
+                    permission_user_id like concat('%', #{userId}, '%')
+                </foreach>
+            </if>
+            )))
+            <if test="searchVo.repoName != ''">
+                and repo_name like concat('%', #{searchVo.repoName}, '%')
+            </if>
+            <if test="searchVo.repoType != -1">
+                and repo_type = #{searchVo.repoType}
+            </if>
+            <if test="searchVo.departmentId != -1">
+                and department_id = #{searchVo.departmentId}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectMonRepoList" resultType="com.jiayi.platform.management.monrepo.dto.MonRepoDto">
+        <include refid="MonRepoListSql" />
+        order by update_at desc
+        <include refid="pageSql" />
+    </select>
+
+    <select id="countMonRepoList" resultType="Long">
+        select count(1) from (<include refid="MonRepoListSql" />) repo
+    </select>
+
+    <select id="countMonRepoName" resultType="Long">
+        select count(1) from t_monitor_repo where repo_name = #{repoName}
+    </select>
+
+    <select id="selectMonRepoById" resultType="com.jiayi.platform.management.monrepo.entity.MonitorRepo">
+        select * from t_monitor_repo where uid = #{uid}
+    </select>
+
+    <insert id="insertMonRepo">
+        insert into t_monitor_repo(uid, repo_name, repo_type, department_id, repo_desc, user_id, create_at, update_at, permission_type, permission_user_id)
+        values(#{uid}, #{repoName}, #{repoType}, #{departmentId}, #{repoDesc}, #{userId}, #{createAt}, #{updateAt}, #{permissionType}, #{permissionUserIdStr})
+    </insert>
+
+    <update id="updateMonRepo">
+        update t_monitor_repo set repo_name = #{repoName}, repo_type = #{repoType}, department_id = #{departmentId},
+                repo_desc = #{repoDesc}, user_id = #{userId}, update_at = #{updateAt}, permission_type = #{permissionType}, permission_user_id = #{permissionUserIdStr}
+        where uid = #{uid}
+    </update>
+
+    <delete id="deleteMonRepoById">
+        delete from t_monitor_repo where uid = #{uid}
+    </delete>
+
+    <select id="selectMaxUid" resultType="Long">
+        select max(uid) from (
+            select max(uid) as uid from t_monitor_repo
+            union all
+            select max(uid) as uid from t_monitor_person
+            union all
+            select max(uid) as uid from t_monitor_object
+        ) result
+    </select>
+
+    <select id="countMonRepoPersons" resultType="java.util.Map">
+        select repo_id as repoId, count(*) as cnt from t_monitor_person
+        <if test="repoIds != null and repoIds.size() > 0">
+            where repo_id in
+            <foreach open="(" close=")" item="repoId" separator="," collection="repoIds">
+                #{repoId}
+            </foreach>
+        </if>
+        group by repo_id
+    </select>
+
+    <select id="countMonRepoObjects" resultType="java.util.Map">
+        select repo_id as repoId, count(*) as cnt from t_monitor_object
+        <if test="repoIds != null and repoIds.size() > 0">
+            where repo_id in
+            <foreach open="(" close=")" item="repoId" separator="," collection="repoIds">
+                #{repoId}
+            </foreach>
+        </if>
+        group by repo_id
+    </select>
+
+
+</mapper>

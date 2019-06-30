@@ -1,0 +1,9 @@
+platform-security-gateway-sql:
+  get-user-auth-codes: |
+    SELECT DISTINCT
+    	r.`code`
+    FROM
+    	t_rel_role_resource rr
+    	LEFT JOIN t_resource r ON rr.resource_id = r.id
+    WHERE
+    	rr.role_id IN ( SELECT role_id FROM t_user_role WHERE user_id = ? )

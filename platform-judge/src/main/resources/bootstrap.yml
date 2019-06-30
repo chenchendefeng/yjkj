@@ -1,0 +1,60 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  application:
+    name: platform-judge
+  profiles:
+    active: dev
+  cloud:
+    config:
+      discovery:
+        enabled: true
+        serviceId: platform-config
+      fail-fast: true
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 1000MB
+
+scheduleclean:
+  retentionDays: 30
+  largeCacheRetentionDays: 7
+  largeCacheSize: 2000000
+  scheduleTime: 0 0 1 * * ?
+
+fileimport:
+  upload.path: /usr/project/uploads/fileimport/upload/
+  errordata:
+    upload:
+      path: /usr/project/uploads/fileimport/errordata/
+    validdate: 30
+
+server:
+  port: 10050
+  servlet:
+    context-path: /judge
+
+eureka:
+  instance:
+    prefer-ip-address: true
+---
+spring:
+  profiles: dev
+eureka:
+  client:
+    service-url:
+      defaultZone: http://192.168.0.229:10000/eureka/
+---
+spring:
+  profiles: bigdev
+eureka:
+  client:
+    service-url:
+      defaultZone: http://192.168.0.182:10000/eureka/
+---
+spring:
+  profiles: stg
+eureka:
+  client:
+    service-url:
+      defaultZone: http://192.168.0.228:10000/eureka/

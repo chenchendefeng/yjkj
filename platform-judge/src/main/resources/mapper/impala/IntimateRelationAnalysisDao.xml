@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.IntimateRelationAnalysisDao">
+    <sql id="intimateRelationAnalysisSql">
+        SELECT #{uid} AS uid, #{uid} % 20 AS uid_mod,
+        CASE WHEN object_type1 = #{objectType} AND object_value1 = #{objectValue} THEN object_type2 ELSE object_type1 END AS object_type,
+        CASE WHEN object_type1 = #{objectType} AND object_value1 = #{objectValue} THEN object_value2 ELSE object_value1 END AS object_value,
+        COUNT(start_at) AS match_days, SUM(match_num) AS match_tracks
+        FROM (
+            SELECT object_type1, object_value1, object_type2, object_value2, start_at, coefficient, match_num
+            FROM multi_feature_analysis WHERE result_type = 1 AND
+            start_at BETWEEN #{beginDate} AND #{endDate}
+            AND (
+                (object_type1 = #{objectType} AND object_value1 = #{objectValue} AND object_type2 IN
+                <foreach collection="resultTypeList" item="type" index="" open="(" separator="," close=")">
+                    #{type}
+                </foreach>)
+                OR (object_type2 = #{objectType} AND object_value2 = #{objectValue} AND object_type1 IN
+                <foreach collection="resultTypeList" item="type" index="" open="(" separator="," close=")">
+                    #{type}
+                </foreach>)
+            )
+        ) result
+        GROUP BY object_type, object_value
+        HAVING COUNT(start_at) >= #{matchDays}
+    </sql>
+
+    <select id="selectIntimateRelationAnalysis" resultType="MultiFeatureAnalysisDto">
+        <include refid="intimateRelationAnalysisSql"/>
+        ORDER BY match_days DESC, match_tracks DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countIntimateRelationAnalysis" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="intimateRelationAnalysisSql"/>) intimates
+    </select>
+
+    <insert id="insertIntimateRelationResult">
+        INSERT INTO judge_result_intimate_relation (uid, uid_mod, object_type, object_value, match_days, match_tracks)
+        <include refid="intimateRelationAnalysisSql"/>
+    </insert>
+
+    <select id="selectIntimateRelationResult" resultType="MultiFeatureAnalysisDto">
+        SELECT * FROM judge_result_intimate_relation WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY match_days DESC, match_tracks DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countIntimateRelationResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_intimate_relation WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+
+    <sql id="intimateRelationDetailSql">
+        SELECT
+        CASE WHEN start_time1 <![CDATA[<]]>= start_time2 THEN start_time1 ELSE start_time1 END AS begin_time,
+        CASE WHEN end_time1 <![CDATA[>]]>= end_time2 THEN end_time1 ELSE end_time1 END AS end_time,
+        CASE WHEN start_time1 <![CDATA[<]]>= start_time2 THEN from_device_id1 ELSE from_device_id2 END AS begin_device_id,
+        CASE WHEN end_time1 <![CDATA[>]]>= end_time2 THEN to_device_id1 ELSE to_device_id2 END AS end_device_id,
+        start_at AS record_date, coefficient, match_num
+        FROM (
+        SELECT start_time1, end_time1, from_device_id1, to_device_id1, start_time2, end_time2, from_device_id2, to_device_id2,
+        start_at, coefficient, match_num
+        FROM multi_feature_analysis WHERE
+        start_at BETWEEN #{beginDate} AND #{endDate}
+        AND (object_type1 = #{objectType} AND object_value1 = #{objectValue}
+        AND object_type2 = #{matchObjectType} AND object_value2 = #{matchObjectValue}
+        OR
+        object_type2 = #{objectType} AND object_value2 = #{objectValue}
+        AND object_type1 = #{matchObjectType} AND object_value1 = #{matchObjectValue})
+        ) result
+    </sql>
+
+    <select id="selectIntimateRelationDetail" resultType="MultiFeatureDetailDto">
+        <include refid="intimateRelationDetailSql"/>
+        ORDER BY record_date DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countIntimateRelationDetail" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="intimateRelationDetailSql"/>) details
+    </select>
+</mapper>

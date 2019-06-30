@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.LineCollisionDao">
+    <sql id="lineCollisionSql">
+        SELECT #{uid} AS uid, #{uid} % 20 AS uid_mod, object_value, match_count, unique_dev_count,
+        CAST(SPLIT_PART(min_time_device, "*", 1) AS BIGINT) AS min_happen_at, CAST(SPLIT_PART(min_time_device, "*", 2) AS BIGINT) AS from_device_id,
+        CAST(SPLIT_PART(max_time_device, "*", 1) AS BIGINT) AS max_happen_at, CAST(SPLIT_PART(max_time_device, "*", 2) AS BIGINT) AS to_device_id
+        FROM (
+            SELECT object_value, COUNT(time_device) AS match_count, COUNT(DISTINCT grid_code) AS unique_dev_count,
+            MIN(time_device) as min_time_device, MAX(time_device) as max_time_device
+            FROM (
+            <foreach collection="tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT object_value, grid_code, CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                FROM ${tableName} WHERE track_type = #{trackType} AND
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        hours <![CDATA[>]]>= #{recentBeginHours} AND hours <![CDATA[<]]>= #{recentEndHours}
+                        AND record_at <![CDATA[>]]>= #{recentBeginDate} AND record_at <![CDATA[<]]>= #{recentEndDate}
+                    </when>
+                    <otherwise>
+                        hours <![CDATA[>]]>= #{beginHours} AND hours <![CDATA[<]]>= #{endHours}
+<!--                        <if test="null != gridList and gridList.size > 0 and gridList.size &lt; 9000">-->
+<!--                            AND grids IN-->
+<!--                            <foreach collection="gridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                #{item}-->
+<!--                            </foreach>-->
+<!--                        </if>-->
+                        AND record_at <![CDATA[>]]>= #{beginDate} AND record_at <![CDATA[<]]>= #{endDate}
+                    </otherwise>
+                </choose>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+                <if test="null != objectValueList and objectValueList.size > 0">
+                    AND object_value IN
+                    <foreach collection="objectValueList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) track
+            GROUP BY object_value
+            HAVING COUNT(DISTINCT grid_code) <![CDATA[>]]>= #{matchCount}
+        ) line
+    </sql>
+
+    <select id="selectLineCollision" resultType="LineCollisionDto">
+        <include refid="lineCollisionSql"/>
+        ORDER BY unique_dev_count DESC, match_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countLineCollision" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="lineCollisionSql"/>) line
+    </select>
+
+    <insert id="insertLineResult">
+        INSERT INTO judge_result_line (uid, uid_mod, object_value, match_count, unique_dev_count, min_happen_at, from_device_id, max_happen_at, to_device_id)
+        <include refid="lineCollisionSql"/>
+    </insert>
+
+    <select id="selectLineResult" resultType="LineCollisionDto">
+        SELECT * FROM judge_result_line WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY unique_dev_count DESC, match_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countLineResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_line WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+</mapper>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.AreaCollisionDao">
+    <sql id="areaCollisionSql">
+        SELECT #{uid} AS uid, #{uid} % 20 AS uid_mod, object_value, match_count, match_condition,
+        CAST(SPLIT_PART(min_time_device, "*", 1) AS BIGINT) AS min_happen_at, CAST(SPLIT_PART(min_time_device, "*", 2) AS BIGINT) AS from_device_id,
+        CAST(SPLIT_PART(max_time_device, "*", 1) AS BIGINT) AS max_happen_at, CAST(SPLIT_PART(max_time_device, "*", 2) AS BIGINT) AS to_device_id
+        FROM (
+            SELECT object_value, COUNT(object_value) AS match_count, GROUP_CONCAT(name) AS match_condition,
+            MIN(min_time_device) AS min_time_device, MAX(max_time_device) AS max_time_device
+            FROM (
+            <foreach collection="conditionList" index="index" item="cond" open=" " separator="UNION ALL" close=" ">
+                <if test="null != cond.deviceIdList and cond.deviceIdList.size > 0">
+                    SELECT #{cond.condName} AS name, object_value,
+                    MIN(time_device) AS min_time_device, MAX(time_device) AS max_time_device
+                    FROM (
+                    <foreach collection="cond.tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                        SELECT object_value, CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                        FROM ${tableName} WHERE track_type = #{trackType} AND
+                        <choose>
+                            <when test="tableName.contains('recent')">
+                                hours <![CDATA[>]]>= #{cond.recentBeginHours} AND hours <![CDATA[<]]>= #{cond.recentEndHours}
+                                AND record_at <![CDATA[>]]>= #{cond.recentBeginDate} AND record_at <![CDATA[<]]>= #{cond.recentEndDate}
+                            </when>
+                            <otherwise>
+                                hours <![CDATA[>]]>= #{cond.beginHours} AND hours <![CDATA[<]]>= #{cond.endHours}
+<!--                                <if test="null != cond.gridList and cond.gridList.size > 0 and cond.gridList.size &lt; 9000">-->
+<!--                                    AND grids IN-->
+<!--                                    <foreach collection="cond.gridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                        #{item}-->
+<!--                                    </foreach>-->
+<!--                                </if>-->
+                                AND record_at <![CDATA[>]]>= #{cond.beginDate} AND record_at <![CDATA[<]]>= #{cond.endDate}
+                            </otherwise>
+                        </choose>
+                        <if test="null != cond.deviceIdList and cond.deviceIdList.size > 0 and cond.deviceIdList.size &lt; 9000">
+                            AND device_id IN
+                            <foreach collection="cond.deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                                #{item}
+                            </foreach>
+                        </if>
+                        <if test="null != objectValueList and objectValueList.size > 0">
+                            AND object_value IN
+                            <foreach collection="objectValueList" index="index" item="item" open="(" separator="," close=")">
+                                #{item}
+                            </foreach>
+                        </if>
+                    </foreach>
+                    ) cond GROUP BY object_value
+                </if>
+            </foreach>
+            ) ranges
+        GROUP BY object_value
+        HAVING COUNT(object_value) <![CDATA[>]]>= #{matchCount}
+        ) area
+    </sql>
+
+    <select id="selectAreaCollision" resultType="AreaCollisionDto">
+        <include refid="areaCollisionSql"/>
+        ORDER BY match_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAreaCollision" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="areaCollisionSql"/>) areas
+    </select>
+
+    <insert id="insertAreaResult">
+        INSERT INTO judge_result_area (uid, uid_mod, object_value, match_count, match_condition, min_happen_at, from_device_id, max_happen_at, to_device_id)
+        <include refid="areaCollisionSql"/>
+    </insert>
+
+    <select id="selectAreaResult" resultType="AreaCollisionDto">
+        SELECT * FROM judge_result_area WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY match_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAreaResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_area WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+
+    <sql id="areaConditionSql">
+        SELECT object_value, min_happen_at, max_happen_at, match_condition FROM (
+        <foreach collection="conditionList" index="index" item="cond" open=" " separator="UNION ALL" close=" ">
+            <if test="null != cond.deviceIdList and cond.deviceIdList.size > 0">
+                SELECT #{cond.condName} AS match_condition, object_value,
+                MIN(record_at) AS min_happen_at, MAX(record_at) AS max_happen_at
+                FROM (
+                <foreach collection="cond.tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                    SELECT object_value, record_at
+                    FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{objectValue}
+                    <choose>
+                        <when test="tableName.contains('recent')">
+                            AND day <![CDATA[>]]>= #{cond.recentBeginHours} AND day <![CDATA[<]]>= #{cond.recentEndHours}
+                            AND record_at <![CDATA[>]]>= #{cond.recentBeginDate} AND record_at <![CDATA[<]]>= #{cond.recentEndDate}
+                        </when>
+                        <otherwise>
+                            AND obj_mod = #{objectHash}
+                            AND day <![CDATA[>]]>= #{cond.beginHours} AND day <![CDATA[<]]>= #{cond.endHours}
+                            AND record_at <![CDATA[>]]>= #{cond.beginDate} AND record_at <![CDATA[<]]>= #{cond.endDate}
+                        </otherwise>
+                    </choose>
+                    <if test="null != cond.deviceIdList and cond.deviceIdList.size > 0 and cond.deviceIdList.size &lt; 9000">
+                        AND device_id IN
+                        <foreach collection="cond.deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                            #{item}
+                        </foreach>
+                    </if>
+                </foreach>
+                ) cond GROUP BY object_value
+            </if>
+        </foreach>
+        ) area
+    </sql>
+
+    <select id="selectAreaCondition" resultType="AreaConditionDto">
+        <include refid="areaConditionSql"/>
+        ORDER BY match_condition
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countAreaCondition" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="areaConditionSql"/>) areas
+    </select>
+</mapper>

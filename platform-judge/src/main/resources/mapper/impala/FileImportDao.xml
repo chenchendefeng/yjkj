@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.FileImportDao">
+    <insert id="insertFileImport" parameterType="String">
+        INSERT INTO judge_result_file_import (uid, uid_mod, sort_num,
+        <foreach collection="fieldNames" index="index" item="field" separator=",">
+            ${field}
+        </foreach>
+        ) VALUES
+        <foreach collection="contents" index="index" item="row" separator=",">
+            (#{uid}, #{uid} % 20, #{index} + 1,
+            <foreach collection="row" index="innerIndex" item="value" separator=",">
+                #{value}
+            </foreach>
+            )
+        </foreach>
+    </insert>
+
+    <select id="selectFileImport" resultType="java.util.HashMap">
+        SELECT
+        <foreach collection="fields" index="index" item="field" separator=",">
+            ${field}
+        </foreach>
+        FROM judge_result_file_import WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY sort_num
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countFileImport" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_file_import WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+</mapper>

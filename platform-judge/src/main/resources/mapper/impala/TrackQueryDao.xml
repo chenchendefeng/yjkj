@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.TrackQueryDao">
+    <sql id="trackQuerySql">
+        SELECT #{uid} as uid, #{uid} % 20 AS uid_mod, object_type_name, object_value, match_count, unique_dev_count,
+        CAST(SPLIT_PART(min_time_device, "*", 1) AS BIGINT) AS min_happen_at, CAST(SPLIT_PART(min_time_device, "*", 2) AS BIGINT) AS from_device_id,
+        CAST(SPLIT_PART(max_time_device, "*", 1) AS BIGINT) AS max_happen_at, CAST(SPLIT_PART(max_time_device, "*", 2) AS BIGINT) AS to_device_id
+        FROM (
+        <foreach collection="queryList" index="index" item="item" open=" " separator="UNION" close=" ">
+            SELECT object_type_name, object_value, COUNT(device_id) AS match_count, COUNT(DISTINCT device_id) AS unique_dev_count,
+            MIN(time_device) AS min_time_device, MAX(time_device) AS max_time_device
+            , GROUP_CONCAT(DISTINCT imsi_imei) AS imsi_imei
+            FROM (
+            <foreach collection="item.tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT #{item.objectTypeName} AS object_type_name, object_value, record_at, device_id,
+                CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                <choose>
+                    <when test="item.trackType == 3"> , imsi_code </when>
+                    <when test="item.trackType == 4"> , imei_code </when>
+                    <otherwise> , NULL </otherwise>
+                </choose>
+                AS imsi_imei
+                FROM ${tableName} WHERE track_type = #{item.trackType} AND object_value = #{item.objectValue}
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        AND day <![CDATA[>]]>= #{item.recentBeginHours} AND day <![CDATA[<]]>= #{item.recentEndHours}
+                        AND record_at <![CDATA[>]]>= #{item.recentBeginDate} AND record_at <![CDATA[<]]>= #{item.recentEndDate}
+                    </when>
+                    <otherwise>
+                        AND obj_mod = #{item.objectHash}
+                        AND day <![CDATA[>]]>= #{item.beginHours} AND day <![CDATA[<]]>= #{item.endHours}
+                        AND record_at <![CDATA[>]]>= #{item.beginDate} AND record_at <![CDATA[<]]>= #{item.endDate}
+                    </otherwise>
+                </choose>
+            </foreach>
+            ) trackUnion
+            GROUP BY object_type_name, object_value
+        </foreach>
+        ) track
+    </sql>
+
+    <select id="selectTrackQuery" resultType="TrackQueryDto">
+        <include refid="trackQuerySql" />
+        ORDER BY unique_dev_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql" />
+    </select>
+
+    <select id="countTrackQuery" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="trackQuerySql" />) tracks
+    </select>
+
+    <insert id="insertTrackQueryResult">
+        INSERT INTO judge_result_track_query (uid, uid_mod, object_type_name, object_value, match_count, unique_dev_count,
+        min_happen_at, from_device_id, max_happen_at, to_device_id)
+        <include refid="trackQuerySql" />
+    </insert>
+
+    <select id="selectTrackQueryResult" resultType="TrackQueryDto">
+        SELECT * FROM judge_result_track_query WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY unique_dev_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql" />
+    </select>
+
+    <select id="countTrackQueryResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_track_query WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+
+    <sql id="trackQueryDetailSql">
+        SELECT track.* FROM (
+        <foreach collection="tableNameList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+            SELECT object_value, device_id, longitude, latitude, record_at
+            <choose>
+                <when test="trackType == 1">
+                    , 'mac' AS object_type_name, NULL AS imsi_imei,
+                    ap_mac, ap_name, power, channel, NULL AS imei_code, NULL AS imsi_code
+                </when>
+                <when test="trackType == 2">
+                    , 'carno' AS object_type_name, NULL AS imsi_imei,
+                    NULL AS ap_mac, NULL AS ap_name, NULL AS power, NULL AS channel, NULL AS imei_code, NULL AS imsi_code
+                </when>
+                <when test="trackType == 3">
+                    , 'imei' AS object_type_name, imsi_code AS imsi_imei,
+                    NULL AS ap_mac, NULL AS ap_name, NULL AS power, NULL AS channel, NULL AS imei_code, imsi_code
+                </when>
+                <when test="trackType == 4">
+                    , 'imsi' AS object_type_name, imei_code AS imsi_imei,
+                    NULL AS ap_mac, NULL AS ap_name, NULL AS power, NULL AS channel, imei_code, NULL AS imsi_code
+                </when>
+            </choose>
+            FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{objectValue}
+            <choose>
+                <when test="tableName.contains('recent')">
+                    AND day <![CDATA[>]]>= #{recentBeginHours} AND day <![CDATA[<]]>= #{recentEndHours}
+                    AND record_at <![CDATA[>]]>= #{recentBeginDate} AND record_at <![CDATA[<]]>= #{recentEndDate}
+                </when>
+                <otherwise>
+                    AND obj_mod = #{objectHash}
+                    AND day <![CDATA[>]]>= #{beginHours} AND day <![CDATA[<]]>= #{endHours}
+                    AND record_at <![CDATA[>]]>= #{beginDate} AND record_at <![CDATA[<]]>= #{endDate}
+                </otherwise>
+            </choose>
+        </foreach>
+        ) track
+    </sql>
+
+    <select id="selectTrackQueryDetail" resultType="TrackQueryDetailDto">
+        <include refid="trackQueryDetailSql"/>
+        ORDER BY record_at DESC, device_id DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countTrackQueryDetail" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="trackQueryDetailSql"/>) tracks
+    </select>
+</mapper>

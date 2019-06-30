@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.MovementAnalysisDao">
+    <sql id="movementAnalysisSql">
+        SELECT grid_code, MIN(start_time) min_happen_at, MAX(end_time) max_happen_at,
+        GROUP_CONCAT(relations) relations, GROUP_CONCAT(DISTINCT devices) devices,
+        SUM(avg_lng / 1000000 * count_total) / SUM(count_total) average_longitude,
+        SUM(avg_lat / 1000000 * count_total) / SUM(count_total) average_latitude,
+        SUM(stay_total) / #{totalDays} average_stay_time,
+        SUM(in_0) in_0, SUM(in_1) in_1, SUM(in_2) in_2, SUM(in_3) in_3, SUM(in_4) in_4, SUM(in_5) in_5,
+        SUM(in_6) in_6, SUM(in_7) in_7, SUM(in_8) in_8, SUM(in_9) in_9, SUM(in_10) in_10, SUM(in_11) in_11,
+        SUM(in_12) in_12, SUM(in_13) in_13, SUM(in_14) in_14, SUM(in_15) in_15, SUM(in_16) in_16, SUM(in_17) in_17,
+        SUM(in_18) in_18, SUM(in_19) in_19, SUM(in_20) in_20, SUM(in_21) in_21, SUM(in_22) in_22, SUM(in_23) in_23,
+        SUM(out_0) out_0, SUM(out_1) out_1, SUM(out_2) out_2, SUM(out_3) out_3, SUM(out_4) out_4, SUM(out_5) out_5,
+        SUM(out_6) out_6, SUM(out_7) out_7, SUM(out_8) out_8, SUM(out_9) out_9, SUM(out_10) out_10, SUM(out_11) out_11,
+        SUM(out_12) out_12, SUM(out_13) out_13, SUM(out_14) out_14, SUM(out_15) out_15, SUM(out_16) out_16, SUM(out_17) out_17,
+        SUM(out_18) out_18, SUM(out_19) out_19, SUM(out_20) out_20, SUM(out_21) out_21, SUM(out_22) out_22, SUM(out_23) out_23,
+        SUM(stay_0) stay_0, SUM(stay_6) stay_6, SUM(stay_12) stay_12, SUM(stay_18) stay_18
+        FROM track_movement_info WHERE
+        object_type = #{objectType} AND object_value = #{objectValue}
+        AND start_time <![CDATA[>]]>= #{beginDate} AND end_time <![CDATA[<]]>= #{endDate}
+        <if test="null != gridCodeList and gridCodeList.size > 0">
+            AND grid_code IN
+            <foreach collection="gridCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        GROUP BY grid_code
+    </sql>
+
+    <select id="selectMovementAnalysis" resultType="MovementAnalysisDto">
+        <include refid="movementAnalysisSql" />
+        ORDER BY average_stay_time DESC
+        <if test="0 != limit and 0 != offset">
+            <include refid="common.pageSql" />
+        </if>
+    </select>
+
+    <select id="countMovementAnalysis" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="movementAnalysisSql" />) grids
+    </select>
+</mapper>

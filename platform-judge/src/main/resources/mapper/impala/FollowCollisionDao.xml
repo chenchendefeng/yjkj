@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.FollowCollisionDao">
+    <sql id="followSql">
+        SELECT #{uid} AS uid, #{uid} % 20 AS uid_mod, object_value, unique_dev_count, match_count, track_count,
+        CAST(SPLIT_PART(min_time_device, "*", 1) AS BIGINT) AS min_happen_at, CAST(SPLIT_PART(min_time_device, "*", 2) AS BIGINT) AS from_device_id,
+        CAST(SPLIT_PART(max_time_device, "*", 1) AS BIGINT) AS max_happen_at, CAST(SPLIT_PART(max_time_device, "*", 2) AS BIGINT) AS to_device_id
+        FROM (
+            SELECT result.object_value,
+            COUNT(DISTINCT refer.time_device) AS match_count, COUNT(result.device_id) AS track_count,
+            COUNT(DISTINCT refer.device_id) AS unique_dev_count,
+            MIN(result.time_device) AS min_time_device, MAX(result.time_device) AS max_time_device
+            FROM (
+            <foreach collection="objTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT object_value, record_at, device_id, CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                FROM ${tableName} WHERE track_type = #{trackType} AND
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        hours <![CDATA[>]]>= #{objRecentBeginHours} AND hours <![CDATA[<]]>= #{objRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{objRecentBeginDate} AND record_at <![CDATA[<]]>= #{objRecentEndDate}
+                    </when>
+                    <otherwise>
+                        hours IN (
+                            SELECT hours FROM (
+                            <foreach collection="refTableList" index="index" item="innerTableName" open=" " separator="UNION" close=" ">
+                                SELECT CAST((record_at + #{refTimeOffset}) / (#{splitHours} * 60 * 60 * 1000) AS INT) AS hours
+                                FROM ${innerTableName} WHERE track_type = #{trackType} AND object_value = #{refObjectValue}
+                                <choose>
+                                    <when test="tableName.contains('recent')">
+                                        AND hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                                    </when>
+                                    <otherwise>
+                                        AND hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                                    </otherwise>
+                                </choose>
+                            </foreach>
+                            UNION
+                            <foreach collection="refTableList" index="index" item="innerTableName" open=" " separator="UNION" close=" ">
+                                SELECT CAST((record_at - #{refTimeOffset}) / (#{splitHours} * 60 * 60 * 1000) AS INT) AS hours
+                                FROM ${innerTableName} WHERE track_type = #{trackType} AND object_value = #{refObjectValue}
+                                <choose>
+                                    <when test="tableName.contains('recent')">
+                                        AND hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                                    </when>
+                                    <otherwise>
+                                        AND hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+                                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                                    </otherwise>
+                                </choose>
+                            </foreach>
+                            ) refHours
+                        )
+<!--                        hours <![CDATA[>]]>= #{objBeginHours} AND hours <![CDATA[<]]>= #{objEndHours}-->
+<!--                        <if test="null != gridList and gridList.size > 0 and gridList.size &lt; 9000">-->
+<!--                            AND grids IN-->
+<!--                            <foreach collection="gridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                #{item}-->
+<!--                            </foreach>-->
+<!--                        </if>-->
+                        AND record_at <![CDATA[>]]>= #{objBeginDate} AND record_at <![CDATA[<]]>= #{objEndDate}
+                    </otherwise>
+                </choose>
+                <if test="null == objectValueList or objectValueList.size == 0">
+                    AND object_value != #{refObjectValue}
+                </if>
+                <if test="null != objectValueList and objectValueList.size > 0">
+                    AND object_value IN
+                    <foreach collection="objectValueList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) result
+            JOIN (
+            <foreach collection="refTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT record_at, record_at + #{refTimeOffset} AS end_at, record_at - #{refTimeOffset} AS begin_at, device_id,
+                CONCAT(CAST(record_at AS STRING), "*", CAST(device_id AS STRING)) AS time_device
+                FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{refObjectValue}
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        AND hours <![CDATA[>]]>= #{refRecentBeginHours} AND hours <![CDATA[<]]>= #{refRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                    </when>
+                    <otherwise>
+                        AND hours <![CDATA[>]]>= #{refBeginHours} AND hours <![CDATA[<]]>= #{refEndHours}
+<!--                        <if test="null != gridList and gridList.size > 0 and gridList.size &lt; 9000">-->
+<!--                            AND grids IN-->
+<!--                            <foreach collection="gridList" index="index" item="item" open="(" separator="," close=")">-->
+<!--                                #{item}-->
+<!--                            </foreach>-->
+<!--                        </if>-->
+                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                    </otherwise>
+                </choose>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) refer
+            ON refer.device_id = result.device_id
+            AND result.record_at BETWEEN refer.begin_at AND refer.end_at
+            GROUP BY result.object_value
+            HAVING COUNT(DISTINCT refer.time_device) <![CDATA[>]]>= #{matchCount}
+        ) follow
+    </sql>
+
+    <select id="selectFollow" resultType="FollowCollisionDto">
+        <include refid="followSql"/>
+        ORDER BY unique_dev_count DESC, match_count DESC, track_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countFollow" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="followSql"/>) follows
+    </select>
+
+    <insert id="insertFollowResult">
+        INSERT INTO judge_result_follow (uid, uid_mod, object_value, unique_dev_count, match_count, track_count,
+        min_happen_at, from_device_id, max_happen_at, to_device_id)
+        <include refid="followSql"/>
+    </insert>
+
+    <select id="selectFollowResult" resultType="FollowCollisionDto">
+        SELECT * FROM judge_result_follow WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+        ORDER BY unique_dev_count DESC, match_count DESC, track_count DESC, min_happen_at, max_happen_at
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countFollowResult" resultType="Long">
+        SELECT COUNT(1) FROM judge_result_follow WHERE uid_mod = #{uid} % 20 AND uid = #{uid}
+    </select>
+
+
+    <sql id="followTrackDetailSql">
+        SELECT object_value, origin_record_at, match_record_at, longitude, latitude, device_id, imsi_imei
+        FROM (
+            SELECT result.object_value, result.record_at AS match_record_at, refer.record_at AS origin_record_at, result.device_id,
+            result.longitude, result.latitude, refer.device_id AS ref_device_id, result.imsi_imei
+            FROM (
+            <foreach collection="objTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT record_at, object_value, device_id, longitude, latitude
+                <choose>
+                    <when test="trackType == 3"> , imsi_code </when>
+                    <when test="trackType == 4"> , imei_code </when>
+                    <otherwise> , NULL </otherwise>
+                </choose>
+                AS imsi_imei
+                FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{objectValue}
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        AND day <![CDATA[>]]>= #{objRecentBeginHours} AND day <![CDATA[<]]>= #{objRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{objRecentBeginDate} AND record_at <![CDATA[<]]>= #{objRecentEndDate}
+                    </when>
+                    <otherwise>
+                        AND obj_mod = #{objectHash}
+                        AND day <![CDATA[>]]>= #{objBeginHours} AND day <![CDATA[<]]>= #{objEndHours}
+                        AND record_at <![CDATA[>]]>= #{objBeginDate} AND record_at <![CDATA[<]]>= #{objEndDate}
+                    </otherwise>
+                </choose>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) result
+            JOIN (
+            <foreach collection="refTableList" index="index" item="tableName" open=" " separator="UNION" close=" ">
+                SELECT record_at, record_at + #{refTimeOffset} AS end_at, record_at - #{refTimeOffset} AS begin_at, device_id
+                FROM ${tableName} WHERE track_type = #{trackType} AND object_value = #{refObjectValue}
+                <choose>
+                    <when test="tableName.contains('recent')">
+                        AND day <![CDATA[>]]>= #{refRecentBeginHours} AND day <![CDATA[<]]>= #{refRecentEndHours}
+                        AND record_at <![CDATA[>]]>= #{refRecentBeginDate} AND record_at <![CDATA[<]]>= #{refRecentEndDate}
+                    </when>
+                    <otherwise>
+                        AND obj_mod = #{refObjectHash}
+                        AND day <![CDATA[>]]>= #{refBeginHours} AND day <![CDATA[<]]>= #{refEndHours}
+                        AND record_at <![CDATA[>]]>= #{refBeginDate} AND record_at <![CDATA[<]]>= #{refEndDate}
+                    </otherwise>
+                </choose>
+                <if test="null != deviceIdList and deviceIdList.size > 0 and deviceIdList.size &lt; 9000">
+                    AND device_id IN
+                    <foreach collection="deviceIdList" index="index" item="item" open="(" separator="," close=")">
+                        #{item}
+                    </foreach>
+                </if>
+            </foreach>
+            ) refer
+            ON refer.device_id = result.device_id AND result.record_at BETWEEN refer.begin_at AND refer.end_at
+        ) track
+    </sql>
+
+    <select id="selectFollowTrackDetail" resultType="FollowTrackDetailDto">
+        <include refid="followTrackDetailSql"/>
+        ORDER BY match_record_at DESC, origin_record_at DESC, device_id DESC
+        <include refid="common.pageSql"/>
+    </select>
+
+    <select id="countFollowTrackDetail" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="followTrackDetailSql"/>) tracks
+    </select>
+</mapper>

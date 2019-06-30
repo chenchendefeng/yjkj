@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiayi.platform.judge.dao.impala.LocationAnalysisDao">
+    <sql id="locationAnalysisSql">
+        <if test="1 == density">
+            SELECT grid_code result_grid_code,
+        </if>
+        <if test="2 == density">
+            SELECT CAST((grid_code / 100000 / 2) AS INT) * 2 * 100000 + CAST((grid_code % 100000) / 2 AS INT) * 2 result_grid_code,
+        </if>
+        <if test="3 == density">
+            SELECT CAST((grid_code / 100000 / 4) AS INT) * 4 * 100000 + CAST((grid_code % 100000) / 4 AS INT) * 4 result_grid_code,
+        </if>
+        <if test="0 == countTime">
+            SUM(count_0) count_0, SUM(count_1) count_1, SUM(count_2) count_2, SUM(count_3) count_3, SUM(count_4) count_4, SUM(count_5) count_5,
+            SUM(count_6) count_6, SUM(count_7) count_7, SUM(count_8) count_8, SUM(count_9) count_9, SUM(count_10) count_10, SUM(count_11) count_11,
+            SUM(count_12) count_12, SUM(count_13) count_13, SUM(count_14) count_14, SUM(count_15) count_15, SUM(count_16) count_16, SUM(count_17) count_17,
+            SUM(count_18) count_18, SUM(count_19) count_19, SUM(count_20) count_20, SUM(count_21) count_21, SUM(count_22) count_22, SUM(count_23) count_23,
+            GROUP_CONCAT(relations) relations, GROUP_CONCAT(DISTINCT devices) devices,
+            SUM(avg_lng / 1000000 * count_total) / SUM(count_total) average_longitude,
+            SUM(avg_lat / 1000000 * count_total) / SUM(count_total) average_latitude,
+            SUM(count_total) count_total
+            FROM track_location_info WHERE
+            object_type = #{objectType} AND object_value = #{objectValue}
+            AND start_at BETWEEN #{beginDate} AND #{endDate}
+            <if test="null != gridCodeList and gridCodeList.size > 0 and gridCodeList.size &lt; 9000">
+                AND grid_code IN
+                <foreach collection="gridCodeList" index="" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </if>
+            GROUP BY result_grid_code
+        </if>
+        <if test="1 == countTime || 2 == countTime">
+            SUM(count_total) count_total,
+            <if test="1 == countTime">
+                SUM(CASE WHEN weekday = 0 THEN count_total ELSE 0 END) count_0,
+                SUM(CASE WHEN weekday = 1 THEN count_total ELSE 0 END) count_1,
+                SUM(CASE WHEN weekday = 2 THEN count_total ELSE 0 END) count_2,
+                SUM(CASE WHEN weekday = 3 THEN count_total ELSE 0 END) count_3,
+                SUM(CASE WHEN weekday = 4 THEN count_total ELSE 0 END) count_4,
+                SUM(CASE WHEN weekday = 5 THEN count_total ELSE 0 END) count_5,
+                SUM(CASE WHEN weekday = 6 THEN count_total ELSE 0 END) count_6,
+            </if>
+            <if test="2 == countTime">
+                SUM(CASE WHEN weekday='1' THEN count_total ELSE 0 END) count_1,
+                SUM(CASE WHEN weekday='2' THEN count_total ELSE 0 END) count_2,
+                SUM(CASE WHEN weekday='3' THEN count_total ELSE 0 END) count_3,
+                SUM(CASE WHEN weekday='4' THEN count_total ELSE 0 END) count_4,
+                SUM(CASE WHEN weekday='5' THEN count_total ELSE 0 END) count_5,
+                SUM(CASE WHEN weekday='6' THEN count_total ELSE 0 END) count_6,
+                SUM(CASE WHEN weekday='7' THEN count_total ELSE 0 END) count_7,
+                SUM(CASE WHEN weekday='8' THEN count_total ELSE 0 END) count_8,
+                SUM(CASE WHEN weekday='9' THEN count_total ELSE 0 END) count_9,
+                SUM(CASE WHEN weekday='10' THEN count_total ELSE 0 END) count_10,
+                SUM(CASE WHEN weekday='11' THEN count_total ELSE 0 END) count_11,
+                SUM(CASE WHEN weekday='12' THEN count_total ELSE 0 END) count_12,
+                SUM(CASE WHEN weekday='13' THEN count_total ELSE 0 END) count_13,
+                SUM(CASE WHEN weekday='14' THEN count_total ELSE 0 END) count_14,
+                SUM(CASE WHEN weekday='15' THEN count_total ELSE 0 END) count_15,
+                SUM(CASE WHEN weekday='16' THEN count_total ELSE 0 END) count_16,
+                SUM(CASE WHEN weekday='17' THEN count_total ELSE 0 END) count_17,
+                SUM(CASE WHEN weekday='18' THEN count_total ELSE 0 END) count_18,
+                SUM(CASE WHEN weekday='19' THEN count_total ELSE 0 END) count_19,
+                SUM(CASE WHEN weekday='20' THEN count_total ELSE 0 END) count_20,
+                SUM(CASE WHEN weekday='21' THEN count_total ELSE 0 END) count_21,
+                SUM(CASE WHEN weekday='22' THEN count_total ELSE 0 END) count_22,
+                SUM(CASE WHEN weekday='23' THEN count_total ELSE 0 END) count_23,
+                SUM(CASE WHEN weekday='24' THEN count_total ELSE 0 END) count_24,
+                SUM(CASE WHEN weekday='25' THEN count_total ELSE 0 END) count_25,
+                SUM(CASE WHEN weekday='26' THEN count_total ELSE 0 END) count_26,
+                SUM(CASE WHEN weekday='27' THEN count_total ELSE 0 END) count_27,
+                SUM(CASE WHEN weekday='28' THEN count_total ELSE 0 END) count_28,
+                SUM(CASE WHEN weekday='29' THEN count_total ELSE 0 END) count_29,
+                SUM(CASE WHEN weekday='30' THEN count_total ELSE 0 END) count_30,
+                SUM(CASE WHEN weekday='31' THEN count_total ELSE 0 END) count_31,
+            </if>
+            GROUP_CONCAT(relations) relations, GROUP_CONCAT(DISTINCT devices) devices,
+            SUM(avg_lng / 1000000 * count_total) / SUM(count_total) average_longitude,
+            SUM(avg_lat / 1000000 * count_total) / SUM(count_total) average_latitude
+            FROM (
+                SELECT grid_code, count_total, relations, devices, avg_lng, avg_lat,
+                <if test="1 == countTime">
+                    (start_at - #{origin}) / 1000 / 60 / 60 / 24 % 7 weekday
+                </if>
+                <if test="2 == countTime">
+                    FROM_UNIXTIME(CAST(start_at / 1000 AS INT), "d") weekday
+                </if>
+                FROM track_location_info WHERE
+                object_type = #{objectType} AND object_value = #{objectValue}
+                AND start_at BETWEEN #{beginDate} AND #{endDate}
+                <if test="null != gridCodeList and gridCodeList.size > 0 and gridCodeList.size &lt; 9000">
+                    AND grid_code IN
+                    <foreach collection="gridCodeList" index="" item="code" open="(" separator="," close=")">
+                        #{code}
+                    </foreach>
+                </if>
+            ) tracks
+            GROUP BY result_grid_code
+        </if>
+    </sql>
+
+    <select id="selectLocationAnalysis" resultType="LocationAnalysisDto">
+        <include refid="locationAnalysisSql"/>
+        ORDER BY count_total DESC
+        <if test="0 != limit and 0 != offset">
+            <include refid="common.pageSql"/>
+        </if>
+    </select>
+
+    <select id="countLocationAnalysis" resultType="Long">
+        SELECT COUNT(1) FROM (<include refid="locationAnalysisSql"/>) grids
+    </select>
+
+    <select id="selectGlobalLocationAnalysis" resultType="LocationAnalysisDto">
+        SELECT GROUP_CONCAT(DISTINCT devices) devices, SUM(count_total) count_total,
+        <if test="0 == countTime">
+            SUM(count_0) count_0, SUM(count_1) count_1, SUM(count_2) count_2, SUM(count_3) count_3, SUM(count_4) count_4, SUM(count_5) count_5,
+            SUM(count_6) count_6, SUM(count_7) count_7, SUM(count_8) count_8, SUM(count_9) count_9, SUM(count_10) count_10, SUM(count_11) count_11,
+            SUM(count_12) count_12, SUM(count_13) count_13, SUM(count_14) count_14, SUM(count_15) count_15, SUM(count_16) count_16, SUM(count_17) count_17,
+            SUM(count_18) count_18, SUM(count_19) count_19, SUM(count_20) count_20, SUM(count_21) count_21, SUM(count_22) count_22, SUM(count_23) count_23
+            FROM track_location_info WHERE
+            object_type = #{objectType} AND object_value = #{objectValue}
+            AND start_at BETWEEN #{beginDate} AND #{endDate}
+            <if test="null != gridCodeList and gridCodeList.size > 0 and gridCodeList.size &lt; 9000">
+                AND grid_code IN
+                <foreach collection="gridCodeList" index="" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </if>
+        </if>
+        <if test="1 == countTime || 2 == countTime">
+            <if test="1 == countTime">
+                SUM(CASE WHEN weekday = 0 THEN count_total ELSE 0 END) count_0,
+                SUM(CASE WHEN weekday = 1 THEN count_total ELSE 0 END) count_1,
+                SUM(CASE WHEN weekday = 2 THEN count_total ELSE 0 END) count_2,
+                SUM(CASE WHEN weekday = 3 THEN count_total ELSE 0 END) count_3,
+                SUM(CASE WHEN weekday = 4 THEN count_total ELSE 0 END) count_4,
+                SUM(CASE WHEN weekday = 5 THEN count_total ELSE 0 END) count_5,
+                SUM(CASE WHEN weekday = 6 THEN count_total ELSE 0 END) count_6
+                FROM (
+                    SELECT (start_at - #{origin}) / 1000 / 60 / 60 / 24 % 7 weekday,
+            </if>
+            <if test="2 == countTime">
+                SUM(CASE WHEN weekday='1' THEN count_total ELSE 0 END) count_1,
+                SUM(CASE WHEN weekday='2' THEN count_total ELSE 0 END) count_2,
+                SUM(CASE WHEN weekday='3' THEN count_total ELSE 0 END) count_3,
+                SUM(CASE WHEN weekday='4' THEN count_total ELSE 0 END) count_4,
+                SUM(CASE WHEN weekday='5' THEN count_total ELSE 0 END) count_5,
+                SUM(CASE WHEN weekday='6' THEN count_total ELSE 0 END) count_6,
+                SUM(CASE WHEN weekday='7' THEN count_total ELSE 0 END) count_7,
+                SUM(CASE WHEN weekday='8' THEN count_total ELSE 0 END) count_8,
+                SUM(CASE WHEN weekday='9' THEN count_total ELSE 0 END) count_9,
+                SUM(CASE WHEN weekday='10' THEN count_total ELSE 0 END) count_10,
+                SUM(CASE WHEN weekday='11' THEN count_total ELSE 0 END) count_11,
+                SUM(CASE WHEN weekday='12' THEN count_total ELSE 0 END) count_12,
+                SUM(CASE WHEN weekday='13' THEN count_total ELSE 0 END) count_13,
+                SUM(CASE WHEN weekday='14' THEN count_total ELSE 0 END) count_14,
+                SUM(CASE WHEN weekday='15' THEN count_total ELSE 0 END) count_15,
+                SUM(CASE WHEN weekday='16' THEN count_total ELSE 0 END) count_16,
+                SUM(CASE WHEN weekday='17' THEN count_total ELSE 0 END) count_17,
+                SUM(CASE WHEN weekday='18' THEN count_total ELSE 0 END) count_18,
+                SUM(CASE WHEN weekday='19' THEN count_total ELSE 0 END) count_19,
+                SUM(CASE WHEN weekday='20' THEN count_total ELSE 0 END) count_20,
+                SUM(CASE WHEN weekday='21' THEN count_total ELSE 0 END) count_21,
+                SUM(CASE WHEN weekday='22' THEN count_total ELSE 0 END) count_22,
+                SUM(CASE WHEN weekday='23' THEN count_total ELSE 0 END) count_23,
+                SUM(CASE WHEN weekday='24' THEN count_total ELSE 0 END) count_24,
+                SUM(CASE WHEN weekday='25' THEN count_total ELSE 0 END) count_25,
+                SUM(CASE WHEN weekday='26' THEN count_total ELSE 0 END) count_26,
+                SUM(CASE WHEN weekday='27' THEN count_total ELSE 0 END) count_27,
+                SUM(CASE WHEN weekday='28' THEN count_total ELSE 0 END) count_28,
+                SUM(CASE WHEN weekday='29' THEN count_total ELSE 0 END) count_29,
+                SUM(CASE WHEN weekday='30' THEN count_total ELSE 0 END) count_30,
+                SUM(CASE WHEN weekday='31' THEN count_total ELSE 0 END) count_31
+                FROM (
+                    SELECT FROM_UNIXTIME(CAST(start_at / 1000 AS INT), "d") weekday,
+            </if>
+                    GROUP_CONCAT(DISTINCT devices) devices, SUM(count_total) count_total
+                    FROM track_location_info
+                    WHERE object_type = #{objectType} AND object_value = #{objectValue}
+                    AND start_at BETWEEN #{beginDate} AND #{endDate}
+                    <if test="null != gridCodeList and gridCodeList.size > 0 and gridCodeList.size &lt; 9000">
+                        AND grid_code IN
+                        <foreach collection="gridCodeList" index="" item="code" open="(" separator="," close=")">
+                            #{code}
+                        </foreach>
+                    </if>
+                    GROUP BY weekday
+                ) tracks;
+        </if>
+    </select>
+</mapper>
